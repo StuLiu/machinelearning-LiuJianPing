@@ -32,6 +32,7 @@ class Policy_Gradient():
         self.session.run(tf.global_variables_initializer())
 
     def create_softmax_network(self):
+        """我们的softmax神经网络的结构如下，注意这个网络不是价值Q网络，而是策略网络"""
         # network weights
         W1 = self.weight_variable([self.state_dim, 20])
         b1 = self.bias_variable([20])
