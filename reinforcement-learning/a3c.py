@@ -23,8 +23,8 @@ import matplotlib.pyplot as plt
 GAME = 'CartPole-v0'
 OUTPUT_GRAPH = True
 LOG_DIR = './log'
-N_WORKERS = 3
-MAX_GLOBAL_EP = 3000
+N_WORKERS = 3           # the count of workers
+MAX_GLOBAL_EP = 580
 GLOBAL_NET_SCOPE = 'Global_Net'
 UPDATE_GLOBAL_ITER = 100
 GAMMA = 0.9
@@ -39,7 +39,7 @@ TEST = 10 # The number of experiment test every 100 episode
 env = gym.make(GAME)
 N_S = env.observation_space.shape[0]
 N_A = env.action_space.n
-
+print(N_S, N_A)
 
 class ACNet(object):
     def __init__(self, scope, globalAC=None):
@@ -53,16 +53,16 @@ class ACNet(object):
                 self.s = tf.placeholder(tf.float32, [None, N_S], 'S')
                 self.a_his = tf.placeholder(tf.int32, [None, ], 'A')
                 self.v_target = tf.placeholder(tf.float32, [None, 1], 'Vtarget')
-
+                # 动作的概率、状态价值、actor的参数以及critic的参数
                 self.a_prob, self.v, self.a_params, self.c_params = self._build_net(scope)
-
+                # TensorFlow的减法操作
                 td = tf.subtract(self.v_target, self.v, name='TD_error')
                 with tf.name_scope('c_loss'):
-                    self.c_loss = tf.reduce_mean(tf.square(td))
-
+                    self.c_loss = tf.reduce_mean(tf.square(td))     # critic的loss是平方loss
                 with tf.name_scope('a_loss'):
-                    log_prob = tf.reduce_sum(tf.log(self.a_prob + 1e-5) * tf.one_hot(self.a_his, N_A, dtype=tf.float32), axis=1, keep_dims=True)
-                    exp_v = log_prob * tf.stop_gradient(td)
+                    log_prob = tf.reduce_sum(tf.log(self.a_prob + 1e-5) * tf.one_hot(self.a_his, N_A, dtype=tf.float32),
+                                             axis=1, keep_dims=True)
+                    exp_v = log_prob * tf.stop_gradient(td)     # 这里的td不再求导，当作是常数
                     entropy = -tf.reduce_sum(self.a_prob * tf.log(self.a_prob + 1e-5),
                                              axis=1, keep_dims=True)  # encourage exploration
                     self.exp_v = ENTROPY_BETA * entropy + exp_v
@@ -73,20 +73,24 @@ class ACNet(object):
                     self.c_grads = tf.gradients(self.c_loss, self.c_params)
 
             with tf.name_scope('sync'):
-                with tf.name_scope('pull'):
+                with tf.name_scope('pull'):     # 把主网络的参数赋予各子网络
                     self.pull_a_params_op = [l_p.assign(g_p) for l_p, g_p in zip(self.a_params, globalAC.a_params)]
                     self.pull_c_params_op = [l_p.assign(g_p) for l_p, g_p in zip(self.c_params, globalAC.c_params)]
-                with tf.name_scope('push'):
+                with tf.name_scope('push'):     # 使用子网络的梯度对主网络参数进行更新
                     self.update_a_op = OPT_A.apply_gradients(zip(self.a_grads, globalAC.a_params))
                     self.update_c_op = OPT_C.apply_gradients(zip(self.c_grads, globalAC.c_params))
 
     def _build_net(self, scope):
         w_init = tf.random_normal_initializer(0., .1)
         with tf.variable_scope('actor'):
+            # 全连接层1
             l_a = tf.layers.dense(self.s, 200, tf.nn.relu6, kernel_initializer=w_init, name='la')
+            # 全连接层2，得到每个动作(N_A个动作)的选择概率，这里为2个，向左或者向右
             a_prob = tf.layers.dense(l_a, N_A, tf.nn.softmax, kernel_initializer=w_init, name='ap')
         with tf.variable_scope('critic'):
+            # 全连接层1
             l_c = tf.layers.dense(self.s, 100, tf.nn.relu6, kernel_initializer=w_init, name='lc')
+            # 全连接层2，得到状态价值
             v = tf.layers.dense(l_c, 1, kernel_initializer=w_init, name='v')  # state value
         a_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope + '/actor')
         c_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope + '/critic')
@@ -136,7 +140,7 @@ class Worker(object):
                         v_s_ = SESS.run(self.AC.v, {self.AC.s: s_[np.newaxis, :]})[0, 0]
                     buffer_v_target = []
                     for r in buffer_r[::-1]:    # reverse buffer r
-                        v_s_ = r + GAMMA * v_s_
+                        v_s_ = r + GAMMA * v_s_ # 使用v(s) = r + v(s+1)计算target_v
                         buffer_v_target.append(v_s_)
                     buffer_v_target.reverse()
 
@@ -174,11 +178,13 @@ if __name__ == "__main__":
         OPT_C = tf.train.RMSPropOptimizer(LR_C, name='RMSPropC')
         GLOBAL_AC = ACNet(GLOBAL_NET_SCOPE)  # we only need its params
         workers = []
-        # Create worker
+        # Create workers
         for i in range(N_WORKERS):
             i_name = 'W_%i' % i   # worker name
             workers.append(Worker(i_name, GLOBAL_AC))
 
+    # Coordinator类用来管理在Session中的多个线程，可以用来同时停止多个工作线程并且向那个在等待所有工作线程终止的程序报告异常，
+    # 该线程捕获到这个异常之后就会终止所有线程。使用 tf.train.Coordinator()来创建一个线程管理器（协调器）对象
     COORD = tf.train.Coordinator()
     SESS.run(tf.global_variables_initializer())
 
@@ -187,12 +193,14 @@ if __name__ == "__main__":
             shutil.rmtree(LOG_DIR)
         tf.summary.FileWriter(LOG_DIR, SESS.graph)
 
+    # 线程列表
     worker_threads = []
     for worker in workers:
         job = lambda: worker.work()
         t = threading.Thread(target=job)
         t.start()
         worker_threads.append(t)
+    # 线程同步
     COORD.join(worker_threads)
 
     testWorker = Worker("test", GLOBAL_AC)

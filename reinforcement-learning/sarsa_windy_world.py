@@ -42,6 +42,7 @@ GOAL = [3, 7]
 ACTIONS = [ACTION_UP, ACTION_DOWN, ACTION_LEFT, ACTION_RIGHT]
 
 def step(state, action):
+    """进行一次动作，状态发生改变"""
     i, j = state
     if action == ACTION_UP:
         return [max(i - 1 - WIND[j], 0), j]
@@ -56,6 +57,7 @@ def step(state, action):
 
 # play for an episode
 def episode(q_value):
+    """一次迭代"""
     # track the total time steps in this episode
     time = 0
 
@@ -63,6 +65,7 @@ def episode(q_value):
     state = START
 
     # choose an action based on epsilon-greedy algorithm
+    # np.random.binomial(n, p),返回n次独立重复实验中事件A(发生概率为p)发生的次数
     if np.random.binomial(1, EPSILON) == 1:
         action = np.random.choice(ACTIONS)
     else:
@@ -89,7 +92,7 @@ def episode(q_value):
 
 def sarsa():
     q_value = np.zeros((WORLD_HEIGHT, WORLD_WIDTH, 4))
-    episode_limit = 500
+    episode_limit = 100
 
     steps = []
     ep = 0
@@ -130,5 +133,11 @@ def sarsa():
         print(row)
     print('Wind strength for each column:\n{}'.format([str(w) for w in WIND]))
 
+def aaa(a):
+    a[0] = 100
 if __name__ == '__main__':
+    a = [1,2,3]
+    aaa(a)
+    print(a)
+    print(np.add.accumulate(a))
     sarsa()

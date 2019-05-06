@@ -8,7 +8,6 @@
 # declaration at the top                                              #
 #######################################################################
 ##https://www.cnblogs.com/pinard/p/9385570.html ##
-## 强化学习（一）模型基础 ##
 
 import numpy as np
 import pickle
@@ -338,6 +337,6 @@ def play():
             print("It is a tie!")
 
 if __name__ == '__main__':
-    train(int(1e5))
+    # train(int(1e5))
     compete(int(1e3))
     play()
