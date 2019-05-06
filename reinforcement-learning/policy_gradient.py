@@ -39,19 +39,22 @@ class Policy_Gradient():
         W2 = self.weight_variable([20, self.action_dim])
         b2 = self.bias_variable([self.action_dim])
         # input layer
-        self.state_input = tf.placeholder("float", [None, self.state_dim])
-        self.tf_acts = tf.placeholder(tf.int32, [None, ], name="actions_num")
-        self.tf_vt = tf.placeholder(tf.float32, [None, ], name="actions_value")
+        self.state_input = tf.placeholder("float", [None, self.state_dim])      # state input
+        self.tf_acts = tf.placeholder(tf.int32, [None, ], name="actions_num")   # action label(yi')
+        self.tf_vt = tf.placeholder(tf.float32, [None, ], name="actions_value") # ？
         # hidden layers
         h_layer = tf.nn.relu(tf.matmul(self.state_input, W1) + b1)
         # softmax layer
         self.softmax_input = tf.matmul(h_layer, W2) + b2
         #softmax output
         self.all_act_prob = tf.nn.softmax(self.softmax_input, name='act_prob')
-        self.neg_log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.softmax_input,
-                                                                      labels=self.tf_acts)
+        # tf.nn.softmax_cross_entropy_with_logits(logits, labels, name=None)
+        # 第一个参数logits：就是神经网络最后一层的输出，如果有batch的话，它的大小就是[batchsize，num_classes]，
+        #     单样本的话，大小就是num_classes；
+        # 第二个参数labels：实际的标签，大小同上。
+        self.neg_log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(
+            logits=self.softmax_input, labels=self.tf_acts)
         self.loss = tf.reduce_mean(self.neg_log_prob * self.tf_vt)  # reward guided loss
-
         self.train_op = tf.train.AdamOptimizer(LEARNING_RATE).minimize(self.loss)
 
     def weight_variable(self, shape):
@@ -63,8 +66,10 @@ class Policy_Gradient():
         return tf.Variable(initial)
 
     def choose_action(self, observation):
-        prob_weights = self.session.run(self.all_act_prob, feed_dict={self.state_input: observation[np.newaxis, :]})
-        action = np.random.choice(range(prob_weights.shape[1]), p=prob_weights.ravel())  # select action w.r.t the actions prob
+        prob_weights = self.session.run(self.all_act_prob,
+                                        feed_dict={self.state_input: observation[np.newaxis, :]})
+        # select action w.r.t the actions prob
+        action = np.random.choice(range(prob_weights.shape[1]), p=prob_weights.ravel())
         return action
 
     def store_transition(self, s, a, r):
@@ -111,6 +116,7 @@ def main():
       next_state,reward,done,_ = env.step(action)
       agent.store_transition(state, action, reward)
       state = next_state
+      # 蒙特卡洛强化学习方法
       if done:
         #print("stick for ",step, " steps")
         agent.learn()
